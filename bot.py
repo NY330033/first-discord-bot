@@ -5,7 +5,7 @@ intents = discord.Intents.all()
 
 client = discord.Client(intents=intents)
 # 사용자가 명령어 입력 시 !를 입력하고 명령어 입력
-client = Bot(command_prefix='!', intents=intents)
+client = Bot(command_prefix=commands.when_mentioned_or('!'), intents=intents)
 
 # on_ready는 시작할 때 한번만 실행.
 @client.event
