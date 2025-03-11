@@ -1,4 +1,7 @@
 dico_token.py
+<<<<<<< HEAD
 *_discord.log
+=======
+>>>>>>> e624fc2677ad84ae3f2a130027da27a32d7ce0cf
 discord.log
 __pycache__/*

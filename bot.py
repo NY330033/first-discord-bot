@@ -23,7 +23,6 @@ description = '테스트중중'
 
 bot = commands.Bot(command_prefix='/', description=description, intents=intents)
 #bot event나 eommand로 만들면 됨
-
 # on_ready는 시작할 때 한번만 실행.
 @bot.event
 async def on_ready():
