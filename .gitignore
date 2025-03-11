@@ -1,2 +1,4 @@
 dico_token.py
-__pycache__/dico_token.cpython-313.pyc
+*_discord.log
+discord.log
+__pycache__/*
