@@ -31,6 +31,12 @@ async def on_ready():
     print(f'ID: {bot.user.name}')
     await bot.change_presence(status=discord.Status.online, activity=discord.Game('만두랑 해파리 연구'))
 
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        print("채널을 찾을 수 없습니다. ID를 확인하세요.")
+        await bot.close()
+        return
+
 # onmessage로 해둔 테스트문구 있으니까 command를 못받길래 지움!! 
 
 @bot.command()
@@ -43,11 +49,14 @@ async def find(ctx, date_str: str):
     try: 
 
         #datetime으로 파싱
-        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H")
+        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H").replace(tzinfo=timezone.utc)
         logger.debug(f"input-date: {input_date}")
 
+        channel = ctx.channel
+
         #메시지 검색
-        messages = [] # < 이게 지금 자꾸 에러가난다... 
+        messages = [msg async for msg in channel.history(limit=1, around=TARGET_DATE)] # < 이게 지금 자꾸 에러가난다... 
+        logger.debug(f"검색된 메시지 개수 : {len(messages)}")
         '''
         현재까지 겪은 에러 젠냥이의 편안한개발을 위해 기록해주기 
         1) 비동기 제너레이터를 반환해서 리스트 변환하려고 flatten 쓰니까 그거업더염 시전
@@ -72,5 +81,61 @@ async def find(ctx, date_str: str):
         logger.error(f"오류 발생: {e}")
         logger.error("예외 발생 위치: \n"+traceback.format_exc())
         await ctx.channel.send("입력 형식이 잘못되었습니다. YYYY-MM-DD-H와 같이 입력해주세요. ")
+
+bot.run(Token)
+
+
+import discord
+from discord.ext import commands
+from dico_token import Token
+import asyncio
+from datetime import datetime, timezone
+
+CHANNEL_ID = 1347914384424566824 
+
+TARGET_DATE = datetime(2024, 3, 10, 15, 30, tzinfo=timezone.utc)
+
+intents = discord.Intents.default()
+intents.message_content = True  
+
+bot = commands.Bot(command_prefix='.',intents=intents)
+
+@bot.event
+async def on_ready():
+    """ 봇이 실행될 때 호출 """
+    print(f'{bot.user}로 로그인됨')
+
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel is None:
+        print("채널을 찾을 수 없습니다. ID를 확인하세요.")
+        await bot.close()
+        return
+    
+@bot.command()
+async def find(ctx, date_str: str):
+    try: 
+
+        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H")
+        logger.debug(f"input-date: {input_date}")
+        messages = [msg async for msg in channel.history(limit=1, around=TARGET_DATE)]
+        
+        if messages:
+            message = messages[0]
+            print(f"찾은 메시지: {message.content}")
+            print(f"작성자: {message.author}")
+            print(f"작성 시간 : {message.created_at}")
+        else:
+            print("메시지를 찾을 수 없습니다.")
+    
+    except Exception as e:
+        print(f"오류 발생: {e}")
+
+    ans = discord.utils.find(lambda x: x.created_at < input_date, messages)
+    
+    await bot.close()
+
+@bot.tree.command(name="cat", description="고양이 이모티콘 출력")
+async def cat_command(interaction: discord.Interaction):
+    await interaction.response.send_message("(=ↀωↀ=)")
 
 bot.run(Token)
