@@ -31,12 +31,6 @@ async def on_ready():
     print(f'ID: {bot.user.name}')
     await bot.change_presence(status=discord.Status.online, activity=discord.Game('만두랑 해파리 연구'))
 
-    channel = bot.get_channel(CHANNEL_ID)
-    if channel is None:
-        print("채널을 찾을 수 없습니다. ID를 확인하세요.")
-        await bot.close()
-        return
-
 # onmessage로 해둔 테스트문구 있으니까 command를 못받길래 지움!! 
 
 @bot.command()
@@ -49,14 +43,11 @@ async def find(ctx, date_str: str):
     try: 
 
         #datetime으로 파싱
-        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H").replace(tzinfo=timezone.utc)
+        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H")
         logger.debug(f"input-date: {input_date}")
 
-        channel = ctx.channel
-
         #메시지 검색
-        messages = [msg async for msg in channel.history(limit=1, around=TARGET_DATE)] # < 이게 지금 자꾸 에러가난다... 
-        logger.debug(f"검색된 메시지 개수 : {len(messages)}")
+        messages = [] # < 이게 지금 자꾸 에러가난다... 
         '''
         현재까지 겪은 에러 젠냥이의 편안한개발을 위해 기록해주기 
         1) 비동기 제너레이터를 반환해서 리스트 변환하려고 flatten 쓰니까 그거업더염 시전
@@ -84,58 +75,90 @@ async def find(ctx, date_str: str):
 
 bot.run(Token)
 
-
-import discord
+""" import discord
 from discord.ext import commands
 from dico_token import Token
-import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-CHANNEL_ID = 1347914384424566824 
-
+CHANNEL_ID = 1347914384424566824
 TARGET_DATE = datetime(2024, 3, 10, 15, 30, tzinfo=timezone.utc)
+TIMEZONE_KST = timezone(timedelta(hours=9))  # 한국 시간 (UTC+9)
 
 intents = discord.Intents.default()
-intents.message_content = True  
+intents.message_content = True
+client = discord.Client(intents=intents)
 
-bot = commands.Bot(command_prefix='.',intents=intents)
+async def fetch_message(channel, target_date, keyword=None, limit=10):
+    """ 특정 날짜 및 키워드로 메시지 검색 """
+    messages = [msg async for msg in channel.history(limit=limit, around=target_date)]
+    
+    if not messages:
+        return None
 
-@bot.event
+    # 키워드 필터링 추가
+    if keyword:
+        messages = [msg for msg in messages if keyword.lower() in msg.content.lower()]
+
+    return messages[0] if messages else None
+
+@client.event
 async def on_ready():
-    """ 봇이 실행될 때 호출 """
-    print(f'{bot.user}로 로그인됨')
+    print(f'{client.user}로 로그인됨')
+    channel = client.get_channel(CHANNEL_ID)
 
-    channel = bot.get_channel(CHANNEL_ID)
     if channel is None:
         print("채널을 찾을 수 없습니다. ID를 확인하세요.")
-        await bot.close()
         return
-    
-@bot.command()
-async def find(ctx, date_str: str):
-    try: 
 
-        input_date = datetime.strptime(date_str, "%Y-%m-%d-%H")
-        logger.debug(f"input-date: {input_date}")
-        messages = [msg async for msg in channel.history(limit=1, around=TARGET_DATE)]
-        
-        if messages:
-            message = messages[0]
-            print(f"찾은 메시지: {message.content}")
-            print(f"작성자: {message.author}")
-            print(f"작성 시간 : {message.created_at}")
-        else:
-            print("메시지를 찾을 수 없습니다.")
-    
-    except Exception as e:
-        print(f"오류 발생: {e}")
+    # 메시지 검색 (예: 2024년 3월 10일 15:30)
+    target_date = datetime(2024, 3, 10, 15, 30, tzinfo=timezone.utc)  # UTC 기준
+    message = await fetch_message(channel, target_date)
 
-    ans = discord.utils.find(lambda x: x.created_at < input_date, messages)
-    
-    await bot.close()
+    if message:
+        print(f"찾은 메시지 : {message.content}")
+        print(f"작성자 : {message.author}")
+        print(f"작성 시간 : {message.created_at}")
+    else:
+        print("메시지를 찾을 수 없습니다.")
 
-@bot.tree.command(name="cat", description="고양이 이모티콘 출력")
-async def cat_command(interaction: discord.Interaction):
-    await interaction.response.send_message("(=ↀωↀ=)")
+@client.event
+async def on_message(message):
+    """ !검색 YYYY-MM-DD HH:MM 키워드 입력 시 메시지를 검색하는 기능 """
+    if message.author == client.user:
+        return  # 봇 메시지 무시
+
+    if message.content.startswith("!검색"):
+        try:
+            parts = message.content.split()
+            if len(parts) < 3:
+                await message.channel.send("사용법: `!검색 YYYY-MM-DD HH:MM 키워드(옵션)`")
+                return
+
+            # 날짜&시간 변환 (사용자는 KST 기준 입력, 내부적으로 UTC 변환)
+            date_str, time_str = parts[1], parts[2]
+            keyword = " ".join(parts[3:]) if len(parts) > 3 else None  # 키워드 옵션
+
+            target_date_kst = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+            target_date_utc = target_date_kst.astimezone(timezone.utc)
+
+            found_message = await fetch_message(message.channel, target_date_utc, keyword)
+
+            if found_message:
+                created_at_kst = found_message.created_at.astimezone(TIMEZONE_KST)  # KST 변환
+                response = (
+                    f"**검색 결과:**\n"
+                    f"`{found_message.content}`\n"
+                    f"**작성자:** {found_message.author}\n"
+                    f"**작성 시간 (KST):** {created_at_kst.strftime('%Y-%m-%d %H:%M')}"
+                )
+            else:
+                response = "메시지를 찾을 수 없습니다."
+            
+            await message.channel.send(response)
+
+        except Exception as e:
+            await message.channel.send("올바른 날짜 형식 (YYYY-MM-DD HH:MM)을 입력하세요.")
+            print(f"오류: {e}")
 
 bot.run(Token)
+"""
